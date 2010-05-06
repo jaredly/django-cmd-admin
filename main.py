@@ -21,7 +21,7 @@ admin.autodiscover()
 
 from pick import *
 
-from edit import totext, fromtext
+from edit import object_to_text, object_from_text
 
 
 from reversion.revisions import revision
@@ -81,7 +81,10 @@ def main():
         model = pick_model(app)
     else:
         model = get_model(app, options.model)
-    reversion.register(model)
+    try:
+        reversion.register(model)
+    except:
+        pass
     if options.num:
         object = get_object(model, options.num)
     elif options.search:

@@ -13,16 +13,18 @@ from django.utils.functional import Promise
 
 EDITOR = 'vim'
 
-FORMAT = '## --%s-- %s'
-safe_line = lambda line:line.startswith('## --') and '\\'+line or line
+head_form = '## --%s-- %s\n'
+
+safe_line = lambda line:[line, '\\'+line][line.startswith('## --')]
 head_line = lambda line:line.startswith('## --')
 back_line = lambda line:line.startswith('\\## --') and line[1:] or line
+head_name = lambda line:line[len('## --'):line.find('--', len('## --'))]
 
 def object_to_text(model, obj):
     fields = sorted((field.creation_counter, field.attname, field) for field in obj._meta.fields)
     text = ''
     for num, name, field in fields:
-        text += '#[%s] type %s\n' % (name, field.__class__.__name__)
+        text += head_form % (name, field.__class__.__name__)
         value = str(getattr(obj, name))
         if field._choices != []:
             for real,pretty in field._choices:
@@ -34,40 +36,38 @@ def object_to_text(model, obj):
                     text += ' '+str(pretty)+'\n'
         else:
             value = '\n'.join(safe_line(line) for line in value.split('\n'))
-            if value and value[0] == '#':value = '\\' + value
-            text += value.replace('\n#','\n\\#').replace('\r\n','\n') + '\n'
+            text += value + '\n'
         text += '\n'
-    #return "hello boys"
     return text
 
-def fromtext(model, text):
+def object_from_text(model, text):
     items = ['']
     for line in text.split('\n'):
-        if line.startswith('#['):
+        if head_line(line):
             items.append(line)
         else:
-            if line.startswith('\\#'):
-                line = line[1:]
-            elif line.startswith('#'):
-                continue
-            items[-1]+='\n'+line
+            items[-1] += '\n' + back_line(line)
+
     if items[0]:
         print 'orphaned lines. exiting'
         return False
     else:
         items = items[1:]
+
     dct = {}
     fdct = {}
+
     for field in model._meta.fields:
         fdct[field.attname] = field
 
     for item in items:
         head, text = item.split('\n',1)
         text = text.strip()
-        if not head.startswith('#['):
+        if not head_line(head):
             print 'bad head: %s' % head
             return False
-        name = head[len('#['):head.find(']')]
+
+        name = head_name(head)
         
         field = fdct[name]
         if field._choices != []:
@@ -79,6 +79,8 @@ def fromtext(model, text):
                     break
         else:
             value = text
+        if type(value)==str and value.strip() == "None" and not isinstance(field, (models.TextField, models.CharField)):
+            value = None
         dct[name] = value
     return dct
 
@@ -86,7 +88,7 @@ def edit_object(model, object):
     revision.start()
 
     filename = tempfile.mktemp('.rst')
-    original = totext(model, object)
+    original = object_to_text(model, object)
     open(filename, 'w').write(original)
     mtime = os.path.getmtime(filename)
 
@@ -101,7 +103,7 @@ def edit_object(model, object):
             if text == original:
                 continue
             original = text
-            dct = fromtext(model, text)
+            dct = object_from_text(model, text)
             if not dct:
                 open('.blogit.bad', 'w').write(text)
                 print 'failed to parse'
@@ -111,7 +113,7 @@ def edit_object(model, object):
     text = open(filename).read()
     if text == original:
         return False
-    dct = fromtext(model, text)
+    dct = object_from_text(model, text)
     if not dct:
         open('.blogit.bad', 'w').write(text)
         print 'failed to parse. saved text to ".blogit.bad"'
@@ -124,7 +126,5 @@ def save_object(object, dct):
     for k,v in dct.iteritems():
         setattr(object, k, v)
     object.save()
-    print 'object saved'
-
 
 # vim: et sw=4 sts=4

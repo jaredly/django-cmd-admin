@@ -10,7 +10,7 @@ def strobj(obj, model):
         return [str(obj)]
     return list(str(getattr(obj, attr)) for attr in amod.list_display if hasattr(obj, attr))
 
-def pick_table(lst):
+def pick_table(lst, new=False):
     lst = list(lst)
     mx_lens = []
     for i in range(0, len(lst[0][1])):

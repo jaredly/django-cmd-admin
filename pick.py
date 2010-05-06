@@ -33,7 +33,10 @@ def get_object(model, pk):
         return pick_object(model)
 
 def pick_object(model):
-    obj = pick_table((obj,[i]+strobj(obj, model)) for i, obj in enumerate(model.objects.all()))
+    objs = tuple((obj,[i]+strobj(obj, model)) for i, obj in enumerate(model.objects.all()))
+    obj = pick_table((('new',('new','Create a new object','','')),)+tuple(objs))
+    if obj == 'new':
+        return model()
     if not obj:
         sys.exit(0)
     return obj
