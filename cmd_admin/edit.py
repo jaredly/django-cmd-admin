@@ -25,15 +25,15 @@ def object_to_text(model, obj):
     text = ''
     for num, name, field in fields:
         text += head_form % (name, field.__class__.__name__)
-        value = str(getattr(obj, name))
+        value = unicode(getattr(obj, name))
         if field._choices != []:
             for real,pretty in field._choices:
                 if isinstance(pretty, Promise):
                     pretty = unicode(pretty)
-                if value == str(real):
-                    text += '+'+str(pretty)+'\n'
+                if value == unicode(real):
+                    text += '+'+unicode(pretty)+'\n'
                 else:
-                    text += ' '+str(pretty)+'\n'
+                    text += ' '+unicode(pretty)+'\n'
         else:
             value = '\n'.join(safe_line(line) for line in value.split('\n'))
             text += value + '\n'
@@ -89,7 +89,7 @@ def edit_object(model, object):
 
     filename = tempfile.mktemp('.rst')
     original = object_to_text(model, object)
-    open(filename, 'w').write(original)
+    open(filename, 'w').write(original.encode('utf-8'))
     mtime = os.path.getmtime(filename)
 
     p = subprocess.Popen((EDITOR, filename), stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
@@ -99,23 +99,25 @@ def edit_object(model, object):
         ntime = os.path.getmtime(filename)
         if ntime > mtime:
             mtime = ntime
-            text = open(filename).read()
+            text = open(filename).read().decode('utf-8')
             if text == original:
                 continue
             original = text
             dct = object_from_text(model, text)
             if not dct:
-                open('.blogit.bad', 'w').write(text)
+                open('.blogit.bad', 'w').write(text.encode('utf-8'))
                 print 'failed to parse'
             else:
                 save_object(object, dct)
+                newtext = object_to_text(model, object)
+                open(filename, 'w').write(newtext.encode('utf-8'))
 
     text = open(filename).read()
     if text == original:
         return False
     dct = object_from_text(model, text)
     if not dct:
-        open('.blogit.bad', 'w').write(text)
+        open('.blogit.bad', 'w').write(text.encode('utf-8'))
         print 'failed to parse. saved text to ".blogit.bad"'
         return False
     else:
@@ -125,6 +127,8 @@ def edit_object(model, object):
 def save_object(object, dct):
     for k,v in dct.iteritems():
         setattr(object, k, v)
+    if not object.slug and object.title:
+        object.slug = object.title.lower().replace(' ','-')
     object.save()
 
 # vim: et sw=4 sts=4
